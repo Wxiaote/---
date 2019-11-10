@@ -1,0 +1,182 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              11/10/2019 15:39:55 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include <AT89x51.H>    
+   2          #include <intrins.h>
+   3          #define uchar unsigned char  //无符号字符型 宏定义  变量范围0~255 uchar
+   4          #define uint  unsigned int   //无符号整型 宏定义  变量范围0~65535 uint
+   5          #define ulong  unsigned long
+   6          
+   7          sbit c_recive = P3^3;
+   8          sbit c_send = P3^2;
+   9          
+  10          sbit beep = P1^0;
+  11          
+  12          uint  time=0;
+  13          uint  timer=0;
+  14          uchar posit=0;
+  15          
+  16          ulong S=0;
+  17          bit      flag =0;
+  18          
+  19          uchar const discode[] ={ 0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8, 0x80, 0x90 };
+  20          
+  21          uchar const positon[4]={ 0xfe, 0xfd, 0xfb, 0xf7};
+  22          
+  23          uchar disbuff[4]={ 0, 0, 0, 0};
+  24          
+  25          void delayms(uint ms)
+  26          {
+  27   1        uchar i=100,j;
+  28   1        for(;ms;ms--) 
+  29   1        {
+  30   2          while(--i)
+  31   2          {
+  32   3            j=10;
+  33   3            while(--j);
+  34   3          }
+  35   2        }
+  36   1      }
+  37          
+  38          
+  39           void Display(void)
+  40          {
+  41   1      
+  42   1        P0=disbuff[posit];
+  43   1      
+  44   1        P2=positon[posit];
+  45   1        if(++posit>=4)
+  46   1        {
+  47   2          posit=0;
+  48   2        }
+  49   1      }
+  50          
+  51          void Conut(void)
+  52          {
+  53   1        uint ms;
+  54   1        time=TH0*256+TL0;
+  55   1      
+C51 COMPILER V9.60.0.0   MAIN                                                              11/10/2019 15:39:55 PAGE 2   
+
+  56   1        TH0=0;
+  57   1        TL0=0;
+  58   1          
+  59   1        S=(time*1.87)/10;     //算出来是MM   
+  60   1          
+  61   1        if(S >= 5000 || S <= 30 || flag == 1)
+  62   1        {
+  63   2          flag = 0;
+  64   2          disbuff[0] = disbuff[1] = disbuff[3] = disbuff[4] = 0xdf;
+  65   2        }  
+  66   1        else
+  67   1        {
+  68   2          disbuff[0]=discode[S/1000];                  
+  69   2          disbuff[1]=discode[S/100%10];                  
+  70   2          disbuff[2]=discode[S/10%10]&0x7f;                     
+  71   2          disbuff[3]=discode[S%10]; 
+  72   2        }
+  73   1      
+  74   1      
+  75   1        if(S > 800)
+  76   1        {
+  77   2          beep =1;
+  78   2        }
+  79   1        else if( 300 < S && S <= 800)
+  80   1        {  
+  81   2          if(500 < S && S <= 800)
+  82   2          {
+  83   3              ms = (S - 300) / 5;
+  84   3          }
+  85   2          else if(300 < S && S <= 500)
+  86   2          {
+  87   3            ms = (S - 300) / 10;
+  88   3          }
+  89   2          beep =0;
+  90   2          delayms(50);
+  91   2          beep =1;
+  92   2          delayms(ms);
+  93   2        }
+  94   1        else if(S <= 300)
+  95   1        {
+  96   2          beep = 0;
+  97   2        }
+  98   1            
+  99   1      }
+ 100          
+ 101          void time0() interrupt 1     //T0中断用来计数器溢出,超过测距范围
+ 102          {
+ 103   1          flag=1;              //中断溢出标志
+ 104   1      }
+ 105          
+ 106          void time1() interrupt 3     //T1中断用来扫描数码管和计800MS启动模块
+ 107          { 
+ 108   1        uint i = 20;
+ 109   1      
+ 110   1        TH1=0xf8;
+ 111   1        TL1=0x30;
+ 112   1        
+ 113   1        Display();
+ 114   1      
+ 115   1        timer++;
+ 116   1      
+ 117   1        if(timer >= 100)      //800MS  启动一次模块
+C51 COMPILER V9.60.0.0   MAIN                                                              11/10/2019 15:39:55 PAGE 3   
+
+ 118   1        {
+ 119   2          timer=0;
+ 120   2          c_send=1;                     
+ 121   2          
+ 122   2          _nop_();
+ 123   2          while(--i);
+ 124   2      
+ 125   2          c_send=0;
+ 126   2        } 
+ 127   1      }
+ 128          
+ 129          void  main(  void  )
+ 130          {  
+ 131   1        beep = 1;
+ 132   1      
+ 133   1          TMOD=0x11;       //设T0为方式1，GATE=1；
+ 134   1        TH0=0;
+ 135   1        TL0=0;          
+ 136   1        TH1=0xf8;      //2MS定时
+ 137   1        TL1=0x30;
+ 138   1        ET0=1;             //允许T0中断
+ 139   1        ET1=1;         //允许T1中断
+ 140   1        TR1=1;         //开启定时器
+ 141   1        EA=1;        //开启总中断
+ 142   1      
+ 143   1        while(1)
+ 144   1        {
+ 145   2          Display();
+ 146   2          while(!c_recive);   //当RX为零时等待
+ 147   2          TR0=1;          //开启计数
+ 148   2          
+ 149   2          while(c_recive);      //当RX为1计数并等待
+ 150   2          TR0=0;        //关闭计数
+ 151   2      
+ 152   2          Conut();      //计算
+ 153   2        }
+ 154   1      }
+ 155                   
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    661    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     27       2
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
